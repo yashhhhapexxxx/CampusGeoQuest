@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export interface ParallaxLayer {
@@ -53,6 +53,48 @@ export const defaultLayers: ParallaxLayer[] = [
   { src: L("fog-1"), alt: "", speedX: 0.12, speedY: 0.01, speedZ: 0, rotation: 0, zIndex: 21, initialTop: "calc(100% - 355px)", initialLeft: "calc(50% + 100px)", width: "1900px", className: "opacity-50" },
 ];
 
+/* ------------------------------------------------------------------ preload
+ * Fetch + decode every layer up front so the scene can appear in one go instead
+ * of trees popping in one by one as each file arrives. Shared by the loading
+ * screen (which waits on it) and the hero (which fades in when it resolves). */
+let heroReady: Promise<void> | null = null;
+let heroLoaded = 0;
+const keepAlive: HTMLImageElement[] = [];
+const progressListeners = new Set<(fraction: number) => void>();
+
+export function preloadHeroLayers(layers: ParallaxLayer[] = defaultLayers): Promise<void> {
+  if (heroReady) return heroReady;
+  heroReady = Promise.all(
+    layers.map(
+      (layer) =>
+        new Promise<void>((resolve) => {
+          const img = new Image();
+          img.decoding = "async";
+          img.src = layer.src;
+          keepAlive.push(img);
+          const done = () => {
+            heroLoaded++;
+            progressListeners.forEach((fn) => fn(heroLoaded / layers.length));
+            resolve();
+          };
+          img.decode().then(done, done); // a failed layer must never block the page
+        }),
+    ),
+  ).then(() => undefined);
+  return heroReady;
+}
+
+export function onHeroProgress(fn: (fraction: number) => void) {
+  progressListeners.add(fn);
+  fn(heroLoaded / defaultLayers.length);
+  return () => {
+    progressListeners.delete(fn);
+  };
+}
+
+// Start downloading as soon as this module loads (before React even renders).
+if (typeof window !== "undefined") preloadHeroLayers();
+
 const TEXT_MOTION = { speedX: 0.07, speedY: 0.05, speedZ: 0.08, rotation: 0.04 };
 
 function transformFor(
@@ -83,6 +125,17 @@ export function ParallaxHero({
   const textRef = useRef<HTMLDivElement>(null);
 
   const sectionRef = useRef<HTMLElement>(null);
+  // Reveal every layer together once all are decoded (safety cap: never wait > 8s).
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    preloadHeroLayers(layers).then(() => alive && setReady(true));
+    const cap = window.setTimeout(() => alive && setReady(true), 8000);
+    return () => {
+      alive = false;
+      window.clearTimeout(cap);
+    };
+  }, [layers]);
 
   useEffect(() => {
     // Mouse-driven only; touch devices get the static composition.
@@ -182,7 +235,8 @@ export function ParallaxHero({
           draggable={false}
           decoding="async"
           className={cn(
-            "pointer-events-none absolute max-w-none select-none will-change-transform",
+            "pointer-events-none absolute max-w-none select-none transition-opacity duration-700 ease-out will-change-transform",
+            !ready && "!opacity-0",
             layer.className,
           )}
           style={{
@@ -197,7 +251,10 @@ export function ParallaxHero({
 
       <div
         ref={textRef}
-        className="absolute text-center text-white will-change-transform"
+        className={cn(
+          "absolute text-center text-white transition-opacity duration-700 ease-out will-change-transform",
+          !ready && "opacity-0",
+        )}
         style={{
           zIndex: TITLE_Z,
           top: "calc(50% - 200px)",

@@ -1,10 +1,28 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
+import { onHeroProgress, preloadHeroLayers } from "./ui/parallax-hero";
 import { TextScramble } from "./text-scramble";
 import { BGPattern } from "./bg-pattern";
 
+/** Longest we'll hold the loading screen waiting for the hero images. */
+const MAX_WAIT_MS = 6000;
+
 export function Preloader({ onComplete }: { onComplete: () => void }) {
+  const [progress, setProgress] = useState(0);
+  const finished = useRef(false);
+  useEffect(() => onHeroProgress(setProgress), []);
+
+  // Leave only when the title has finished scrambling AND the hero scene is ready
+  // (or MAX_WAIT_MS passed), so the mountains appear all at once, not tree by tree.
+  const finish = () => {
+    if (finished.current) return;
+    finished.current = true;
+    const timeout = new Promise<void>((r) => setTimeout(r, MAX_WAIT_MS));
+    Promise.race([preloadHeroLayers(), timeout]).then(() => setTimeout(onComplete, 200));
+  };
+
   return (
     <motion.div
       className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#08080A] overflow-hidden"
@@ -42,9 +60,7 @@ export function Preloader({ onComplete }: { onComplete: () => void }) {
           className="font-mono uppercase text-2xl md:text-4xl lg:text-5xl text-[#F3F4F6] tracking-[0.2em] text-center px-6"
           duration={1.4}
           speed={0.04}
-          onScrambleComplete={() => {
-            setTimeout(onComplete, 200);
-          }}
+          onScrambleComplete={finish}
         >
           GeoQuest
         </TextScramble>
@@ -59,6 +75,14 @@ export function Preloader({ onComplete }: { onComplete: () => void }) {
         >
           CAMPUS GEOQUEST · TEN STATIONS · ONE TRAIL
         </motion.div>
+      </div>
+
+      {/* Thin progress line while the hero scene downloads */}
+      <div className="absolute bottom-8 left-1/2 h-px w-40 -translate-x-1/2 overflow-hidden bg-white/10">
+        <div
+          className="h-full bg-[#B5D98A] transition-[width] duration-300 ease-out"
+          style={{ width: `${Math.round(progress * 100)}%` }}
+        />
       </div>
     </motion.div>
   );
