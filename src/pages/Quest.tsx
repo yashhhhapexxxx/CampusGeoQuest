@@ -137,12 +137,31 @@ export default function Quest() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#08080A] text-white">
+      {/* Campus backdrop: pre-blurred IIT Roorkee Main Building (4.5 KB, shared with the
+          loading screen) with a slow drift. Darkened so the card stays readable outdoors.
+          Photo: "Main(Administrative)Building IIT-Roorkee" by Sidbij, CC BY-SA 4.0, via Wikimedia Commons. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <img
+          src="/images/iitr-main-building-blur.webp"
+          alt=""
+          decoding="async"
+          className="quest-drift absolute inset-0 size-full object-cover opacity-80"
+          style={{ objectPosition: "center 25%" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to bottom, rgba(8,8,10,0.45) 0%, rgba(8,8,10,0.7) 55%, rgba(8,8,10,0.95) 100%)",
+          }}
+        />
+      </div>
       <div className="pointer-events-none absolute inset-0 grid-blueprint opacity-25" />
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(60% 50% at 50% 35%, rgba(0,229,255,0.06), transparent 70%)",
+            "radial-gradient(60% 50% at 50% 35%, rgba(127,163,91,0.10), transparent 70%)",
         }}
       />
       <div className="noise-overlay" />
@@ -337,11 +356,26 @@ export default function Quest() {
 
               {stage === "complete" && (
                 <>
-                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-[color:var(--safe)]/30 bg-[color:var(--safe)]/10">
-                    <MapPin size={22} className="text-[color:var(--safe)]" />
-                  </div>
+                  {/* Reward: the campus lens from the homepage, now "unlocked". */}
+                  <motion.div
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 180, damping: 16, delay: 0.1 }}
+                    className="relative mx-auto size-32 overflow-hidden rounded-full border border-[#B5D98A]/50"
+                    style={{ boxShadow: "0 0 40px rgba(181,217,138,0.35), inset 0 0 24px rgba(8,10,9,0.8)" }}
+                  >
+                    <img
+                      src="/images/iitr-lens.webp"
+                      alt="IIT Roorkee Main Building"
+                      className="size-full object-cover"
+                      style={{ objectPosition: "center 30%" }}
+                    />
+                    <span className="absolute bottom-2 left-1/2 grid size-7 -translate-x-1/2 place-items-center rounded-full border border-[color:var(--safe)]/40 bg-[#08080A]/80">
+                      <MapPin size={13} className="text-[color:var(--safe)]" />
+                    </span>
+                  </motion.div>
                   <p className="mt-6 text-center text-[10px] uppercase tracking-[0.3em] text-text-secondary">
-                    Trail complete
+                    Trail complete · IIT Roorkee
                   </p>
                   <h1 className="mt-3 text-center font-serif text-4xl tracking-tight">
                     You followed the Earth's clues.

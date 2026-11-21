@@ -150,3 +150,22 @@ body {
     animation: none;
   }
 }
+
+/* Quest backdrop: very slow push-in/drift (transform only — composited, no repaint). */
+@keyframes quest-drift {
+  from {
+    transform: scale(1.08) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.18) translate3d(-1.5%, -1%, 0);
+  }
+}
+.quest-drift {
+  animation: quest-drift 28s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .quest-drift {
+    animation: none;
+  }
+}
