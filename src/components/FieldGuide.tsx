@@ -1,9 +1,9 @@
 "use client";
-import { motion } from "motion/react";
-import { SpotlightCard } from "./spotlight-card";
-import CursorGrid from "./CursorGrid";
-
-type Difficulty = "Easy" | "Medium" | "Tough";
+import { useRef } from "react";
+import { SeismicTap } from "./SeismicTap";
+import { TopoBackground } from "./TopoBackground";
+import { useDeferredMount } from "@/lib/useDeferredMount";
+import { StationOrbit, type Difficulty } from "./StationOrbit";
 
 interface Module {
   n: string;
@@ -102,73 +102,38 @@ const MODULES: Module[] = [
 ];
 
 export function FieldGuide() {
+  const sectionRef = useRef<HTMLElement>(null);
+  // Start the contour shader only after loading finishes and the section is close.
+  const showTopo = useDeferredMount(sectionRef);
+
   return (
-    <section className="relative mx-auto max-w-[1400px] px-6 py-32">
-      <div aria-hidden className="pointer-events-none absolute inset-0 z-0 opacity-50">
-        <CursorGrid
-          cellSize={64}
-          color="#00E5FF"
-          radius={150}
-          falloff="smooth"
-          holdTime={400}
-          fadeDuration={900}
-          lineWidth={1}
-          maxOpacity={1}
-          fillOpacity={0.02}
-          gridOpacity={0}
-          cellRadius={0}
-          clickPulse
-          pulseSpeed={700}
-          trackWindow
-        />
+    <section ref={sectionRef} className="relative w-full overflow-hidden px-6 py-28 md:py-32">
+      {/* Living topographic map across the whole section. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
+        {showTopo && <TopoBackground />}
       </div>
 
-      <div className="relative z-10">
-        <p className="tabular text-[10px] uppercase tracking-[0.3em] text-text-secondary">
-          / 03 · The Field Guide
-        </p>
-        <h2 className="mt-6 max-w-2xl font-serif text-4xl leading-tight tracking-tight md:text-5xl">
-          Ten stations. Ten pieces of the Earth's story.
-        </h2>
-        <p className="mt-6 max-w-2xl text-base leading-relaxed text-text-secondary">
-          Fold the map, read the rocks, and follow the evidence. Three easy, three medium, four
-          tough — every stop is built on a real geological principle, not a guess.
-        </p>
+      {/* Tap anywhere in this section: a mini earthquake ripples out from the finger. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-20">
+        <SeismicTap />
+      </div>
 
-        <div className="mt-14 grid gap-4 md:grid-cols-3">
-          {MODULES.map((m, i) => (
-            <motion.div
-              key={m.n}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ delay: i * 0.05, duration: 0.6 }}
-              className={m.span}
-            >
-              <SpotlightCard className="h-full p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <span className="tabular text-[10px] uppercase tracking-[0.25em] text-text-secondary">
-                    {m.n}
-                  </span>
-                  <span
-                    className={`tabular rounded-full border px-2.5 py-1 text-[9px] uppercase tracking-[0.18em] ${
-                      m.difficulty === "Easy"
-                        ? "border-[color:var(--safe)]/30 bg-[color:var(--safe)]/10 text-[color:var(--safe)]"
-                        : m.difficulty === "Medium"
-                          ? "border-[color:var(--caution)]/30 bg-[color:var(--caution)]/10 text-[color:var(--caution)]"
-                          : "border-[color:var(--danger)]/30 bg-[color:var(--danger)]/10 text-[color:var(--danger)]"
-                    }`}
-                  >
-                    {m.difficulty}
-                  </span>
-                </div>
+      <div className="relative z-10 mx-auto max-w-[1400px]">
+        <div className="text-center">
+          <p className="tabular text-[10px] uppercase tracking-[0.3em] text-text-secondary">
+            / 03 · The Field Guide
+          </p>
+          <h2 className="text-shine mx-auto mt-5 max-w-4xl font-impact text-4xl uppercase leading-[1] tracking-wide md:text-6xl">
+            Ten stations. One loop.
+          </h2>
+          <p className="mx-auto mt-5 max-w-xl text-sm leading-relaxed text-text-secondary md:text-base">
+            Each stop is a real piece of the Earth's story. Tap a station to read it, or let the
+            trail turn on its own.
+          </p>
+        </div>
 
-                <h3 className="mt-4 text-lg tracking-tight text-white/90">{m.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-white/70">{m.problem}</p>
-                <p className="mt-3 text-xs leading-relaxed text-text-secondary">{m.how}</p>
-              </SpotlightCard>
-            </motion.div>
-          ))}
+        <div className="mt-12 md:mt-16">
+          <StationOrbit stations={MODULES} />
         </div>
       </div>
     </section>
