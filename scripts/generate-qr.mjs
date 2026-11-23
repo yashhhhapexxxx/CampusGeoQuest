@@ -2,7 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import QRCode from "qrcode";
 
 const OUT_DIR = "public/qr";
-const TOKENS = Array.from({ length: 10 }, (_, i) => `GEOQUEST:ST-${String(i + 1).padStart(2, "0")}`);
+const LOCATIONS = ["APJ Block", "Chemical Lawn", "ABN School", "Church", "MAC", "SAC Gym", "SAC (Badminton Hall)", "Archi Lawn (Archi Hut)", "Instrumentation Centre", "Main Building (Sundial)"];
+const TOKENS = LOCATIONS.map((_, i) => `GEOQUEST:ST-${String(i + 1).padStart(2, "0")}`);
 
 await mkdir(OUT_DIR, { recursive: true });
 
@@ -22,7 +23,7 @@ const rows = TOKENS.map((token) => {
   return `
     <figure>
       <img src="./station-${n}.png" alt="Station ${n} QR code" />
-      <figcaption>Station ${n}<br /><code>${token}</code></figcaption>
+      <figcaption>Station ${n} · ${LOCATIONS[Number(n) - 1]}<br /><code>${token}</code></figcaption>
     </figure>`;
 }).join("");
 

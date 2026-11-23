@@ -1,9 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
-const STATIONS = Array.from({ length: 10 }, (_, i) => ({
-  n: String(i + 1).padStart(2, "0"),
-}));
+// Keep in sync with src/data/quest.ts (station i ↔ location i ↔ QR GEOQUEST:ST-0i)
+const LOCATIONS = ["APJ Block", "Chemical Lawn", "ABN School", "Church", "MAC", "SAC Gym", "SAC (Badminton Hall)", "Archi Lawn (Archi Hut)", "Instrumentation Centre", "Main Building (Sundial)"];
+const STATIONS = LOCATIONS.map((name, i) => ({ n: String(i + 1).padStart(2, "0"), name }));
 
 const INK = rgb(0.031, 0.031, 0.039);
 const MUTED = rgb(0.42, 0.44, 0.48);
@@ -105,7 +105,7 @@ for (let pageIndex = 0; pageIndex < PAGE_COUNT; pageIndex++) {
       height: qrSize,
     });
 
-    const label = `Location ${station.n}`;
+    const label = `${station.n} · ${station.name}`;
     const labelSize = 9.5;
     const labelWidth = bold.widthOfTextAtSize(label, labelSize);
     page.drawText(label, {

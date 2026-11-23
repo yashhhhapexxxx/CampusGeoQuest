@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Camera, Check, MapPin, QrCode, RotateCcw, X } from "lucide-react";
 import QrScanner from "qr-scanner";
-import { START_HINT, STATIONS } from "../data/quest";
+import { START_HINT, STATIONS, checkMeasure, checkText } from "../data/quest";
+import { TrailBuddy } from "../components/TrailBuddy";
 
 type Stage = "scan" | "question" | "correct" | "complete";
 
@@ -32,7 +33,9 @@ export default function Quest() {
   const [error, setError] = useState<string | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  // State (not a ref) so the scanner starts whenever the <video> actually mounts —
+  // the stage transition can mount it after `cameraOn` flips.
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const scannerRef = useRef<QrScanner | null>(null);
 
   const station = STATIONS[Math.min(currentIndex, STATIONS.length - 1)];
@@ -74,9 +77,9 @@ export default function Quest() {
   acceptTokenRef.current = acceptToken;
 
   useEffect(() => {
-    if (!cameraOn || !videoRef.current) return;
+    if (!cameraOn || !videoEl) return;
     const scanner = new QrScanner(
-      videoRef.current,
+      videoEl,
       (result) => acceptTokenRef.current(result.data),
       {
         preferredCamera: "environment",
@@ -98,7 +101,7 @@ export default function Quest() {
       scanner.destroy();
       if (scannerRef.current === scanner) scannerRef.current = null;
     };
-  }, [cameraOn]);
+  }, [cameraOn, videoEl]);
 
   const startCamera = () => {
     setError(null);
@@ -106,24 +109,72 @@ export default function Quest() {
     setCameraOn(true);
   };
 
+  const [typed, setTyped] = useState("");
+  const [strikeIn, setStrikeIn] = useState("");
+  const [dipIn, setDipIn] = useState("");
+  const [invalid, setInvalid] = useState(false);
+
+  const pass = () => {
+    setWrong(false);
+    setInvalid(false);
+    setStage("correct");
+  };
+
   const choose = (index: number) => {
-    if (stage !== "question") return;
+    if (stage !== "question" || station.answer.kind !== "mcq") return;
     setSelected(index);
-    if (index === station.correctIndex) {
+    if (index === station.answer.answer) pass();
+    else setWrong(true);
+  };
+
+  const submitText = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (station.answer.kind !== "text") return;
+    if (checkText(typed, station.answer)) pass();
+    else setWrong(true);
+  };
+
+  const submitMeasure = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (station.answer.kind !== "measure") return;
+    const r = checkMeasure(Number(strikeIn), Number(dipIn), station.answer);
+    if (!r.valid) {
+      setInvalid(true);
       setWrong(false);
-      setStage("correct");
+      return;
+    }
+    if (r.ok) {
+      try {
+        localStorage.setItem(`campus-geoquest-measure-${station.id}`, JSON.stringify({ strike: Number(strikeIn), dip: Number(dipIn) }));
+      } catch {
+        /* storage blocked */
+      }
+      pass();
     } else {
+      setInvalid(false);
       setWrong(true);
     }
   };
 
-  const advance = () => {
+  const [notYet, setNotYet] = useState(false);
+
+  /** Move on to the next station; `openCamera` starts scanning straight away. */
+  const advance = (openCamera: boolean) => {
     const next = currentIndex + 1;
+    setNotYet(false);
     setSelected(null);
     setWrong(false);
+    setInvalid(false);
+    setTyped("");
+    setStrikeIn("");
+    setDipIn("");
     setError(null);
     setCurrentIndex(next);
     setStage(next >= STATIONS.length ? "complete" : "scan");
+    if (openCamera && next < STATIONS.length) {
+      setCameraError(null);
+      setCameraOn(true);
+    }
   };
 
   const reset = () => {
@@ -166,7 +217,7 @@ export default function Quest() {
       />
       <div className="noise-overlay" />
 
-      <header className="relative z-10 mx-auto flex max-w-3xl items-center justify-between px-6 py-6">
+      <header className="relative z-10 mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-6 sm:px-6">
         <Link
           to="/"
           className="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] text-text-secondary transition-colors hover:text-white"
@@ -205,7 +256,7 @@ export default function Quest() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -14 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 backdrop-blur-md"
+              className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 backdrop-blur-md sm:p-8"
             >
               {stage === "scan" && (
                 <>
@@ -222,11 +273,11 @@ export default function Quest() {
                     Point your camera at the QR code to unlock the question.
                   </p>
 
-                  <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                    <p className="text-[9px] uppercase tracking-[0.25em] text-text-secondary">
-                      Your clue
+                  <div className="mt-6 rounded-xl border border-[#B5D98A]/25 bg-[#B5D98A]/[0.05] p-5">
+                    <p className="text-[9px] uppercase tracking-[0.25em] text-[#B5D98A]">
+                      {currentIndex === 0 ? "Your first clue · find the starting location" : "Your clue"}
                     </p>
-                    <p className="mt-2 text-sm leading-relaxed text-white/80">{scanHint}</p>
+                    <p className="mt-3 whitespace-pre-line font-serif text-lg italic leading-relaxed text-white/90">{scanHint}</p>
                   </div>
 
                   <div className="mt-6 space-y-3">
@@ -244,7 +295,7 @@ export default function Quest() {
                     {cameraOn && (
                       <div className="overflow-hidden rounded-xl border border-white/15 bg-black">
                         <video
-                          ref={videoRef}
+                          ref={setVideoEl}
                           muted
                           playsInline
                           className="aspect-square w-full object-cover"
@@ -285,37 +336,79 @@ export default function Quest() {
               {stage === "question" && (
                 <>
                   <p className="text-[10px] uppercase tracking-[0.3em] text-text-secondary">
-                    Station {String(station.id).padStart(2, "0")}
+                    Station {String(station.id).padStart(2, "0")} · {station.location}
                   </p>
+                  {station.context && (
+                    <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm leading-relaxed text-white/75">
+                      {station.context}
+                    </p>
+                  )}
                   <h1 className="mt-4 font-serif text-3xl leading-tight tracking-tight md:text-4xl">
                     {station.question}
                   </h1>
-                  <p className="mt-3 text-sm leading-relaxed text-text-secondary">
-                    {station.questionHint}
-                  </p>
 
-                  <div className="mt-7 space-y-3">
-                    {station.options.map((option, i) => {
-                      const isWrong = wrong && selected === i;
-                      return (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => choose(i)}
-                          className={`ease-precision flex w-full items-center gap-4 rounded-xl border px-4 py-3.5 text-left text-sm transition-all ${
-                            isWrong
-                              ? "border-[color:var(--danger)]/50 bg-[color:var(--danger)]/10 text-white"
-                              : "border-white/10 bg-white/[0.02] text-white/80 hover:border-white/25 hover:bg-white/[0.04]"
-                          }`}
-                        >
-                          <span className="tabular text-[10px] uppercase tracking-[0.2em] text-text-secondary">
-                            {String.fromCharCode(65 + i)}
-                          </span>
-                          <span>{option}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {station.answer.kind === "mcq" && (
+                    <div className="mt-7 space-y-3">
+                      {station.answer.options.map((option, i) => {
+                        const isWrong = wrong && selected === i;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => choose(i)}
+                            className={`ease-precision flex w-full items-center gap-4 rounded-xl border px-4 py-3.5 text-left text-sm transition-all ${
+                              isWrong
+                                ? "border-[color:var(--danger)]/50 bg-[color:var(--danger)]/10 text-white"
+                                : "border-white/10 bg-white/[0.02] text-white/80 hover:border-white/25 hover:bg-white/[0.04]"
+                            }`}
+                          >
+                            <span className="tabular text-[10px] uppercase tracking-[0.2em] text-text-secondary">
+                              {String.fromCharCode(65 + i)}
+                            </span>
+                            <span>{option}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {station.answer.kind === "text" && (
+                    <form onSubmit={submitText} className="mt-7 space-y-3">
+                      <input
+                        value={typed}
+                        onChange={(e) => { setTyped(e.target.value); setWrong(false); }}
+                        inputMode={station.answer.numeric ? "numeric" : "text"}
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        placeholder={station.answer.placeholder ?? "Type your answer"}
+                        aria-label="Your answer"
+                        className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-4 py-3.5 text-base text-white outline-none placeholder:text-white/35 focus:border-white/40"
+                      />
+                      <button type="submit" className="ease-precision flex w-full items-center justify-center gap-3 rounded-full bg-white px-8 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:shadow-[0_0_60px_rgba(255,255,255,0.15)]">Check answer</button>
+                    </form>
+                  )}
+
+                  {station.answer.kind === "measure" && (
+                    <form onSubmit={submitMeasure} className="mt-7 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-text-secondary">Strike (0–359°)</span>
+                          <input value={strikeIn} onChange={(e) => { setStrikeIn(e.target.value); setInvalid(false); setWrong(false); }} inputMode="numeric" placeholder="e.g. 045" className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/[0.04] px-4 py-3.5 text-base text-white outline-none placeholder:text-white/35 focus:border-white/40" />
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-text-secondary">Dip (0–90°)</span>
+                          <input value={dipIn} onChange={(e) => { setDipIn(e.target.value); setInvalid(false); setWrong(false); }} inputMode="numeric" placeholder="e.g. 30" className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/[0.04] px-4 py-3.5 text-base text-white outline-none placeholder:text-white/35 focus:border-white/40" />
+                        </label>
+                      </div>
+                      <button type="submit" className="ease-precision flex w-full items-center justify-center gap-3 rounded-full bg-white px-8 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:shadow-[0_0_60px_rgba(255,255,255,0.15)]">Record measurement</button>
+                      {invalid && (
+                        <p className="flex items-start gap-2 text-xs leading-relaxed text-[color:var(--danger)]">
+                          <X size={13} className="mt-0.5 shrink-0" />
+                          Enter a strike between 0 and 359 and a dip between 0 and 90.
+                        </p>
+                      )}
+                    </form>
+                  )}
 
                   {wrong && (
                     <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-[color:var(--danger)]">
@@ -332,25 +425,57 @@ export default function Quest() {
                     <Check size={22} className="text-[color:var(--safe)]" />
                   </div>
                   <p className="mt-6 text-center text-[10px] uppercase tracking-[0.3em] text-text-secondary">
-                    Station {String(station.id).padStart(2, "0")} · Correct
+                    Station {String(station.id).padStart(2, "0")} · {station.location} · Correct
                   </p>
                   <h1 className="mt-3 text-center font-serif text-4xl tracking-tight">
                     Coordinates unlocked.
                   </h1>
-                  <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                    <p className="text-[9px] uppercase tracking-[0.25em] text-text-secondary">
-                      Next coordinates
+                  {station.concept && (
+                    <p className="mt-3 text-center text-[10px] uppercase tracking-[0.25em] text-[#B5D98A]">
+                      Concept · {station.concept}
                     </p>
-                    <p className="mt-2 text-sm leading-relaxed text-white/80">{station.nextHint}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={advance}
-                    className="ease-precision mt-6 flex w-full items-center justify-center gap-3 rounded-full bg-white px-8 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:shadow-[0_0_60px_rgba(255,255,255,0.15)]"
-                  >
-                    {isLast ? "Finish the Trail" : `Continue to Station ${station.id + 1}`}
-                    <ArrowRight size={14} />
-                  </button>
+                  )}
+                  {isLast ? (
+                    <button
+                      type="button"
+                      onClick={() => advance(false)}
+                      className="ease-precision mt-6 flex w-full items-center justify-center gap-3 rounded-full bg-white px-8 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:shadow-[0_0_60px_rgba(255,255,255,0.15)]"
+                    >
+                      Finish the Trail
+                      <ArrowRight size={14} />
+                    </button>
+                  ) : (
+                    <>
+                      <div className="mt-6 rounded-xl border border-[#B5D98A]/25 bg-[#B5D98A]/[0.05] p-5">
+                        <p className="text-[9px] uppercase tracking-[0.25em] text-[#B5D98A]">
+                          Clue to Station {String(station.id + 1).padStart(2, "0")}
+                        </p>
+                        <p className="mt-3 whitespace-pre-line font-serif text-lg italic leading-relaxed text-white/90">{station.nextHint}</p>
+                      </div>
+                      <div className="mt-6 grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setNotYet(true)}
+                          className="ease-precision flex items-center justify-center rounded-full border border-white/20 px-4 py-4 text-[10px] font-bold uppercase tracking-[0.18em] text-white/80 transition-all hover:border-white/40 hover:text-white"
+                        >
+                          Not reached yet
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => advance(true)}
+                          className="ease-precision flex items-center justify-center gap-2 rounded-full bg-white px-4 py-4 text-[10px] font-bold uppercase tracking-[0.18em] text-black transition-all hover:shadow-[0_0_60px_rgba(255,255,255,0.15)]"
+                        >
+                          <MapPin size={13} />
+                          Reached it
+                        </button>
+                      </div>
+                      {notYet && (
+                        <p className="mt-4 text-center text-sm leading-relaxed text-white/70">
+                          No rush — read the clue again and explore. Tap <b className="text-white">Reached it</b> when you’re at the location, then scan its QR code.
+                        </p>
+                      )}
+                    </>
+                  )}
                 </>
               )}
 
@@ -409,6 +534,11 @@ export default function Quest() {
               Progress is saved on this device
             </p>
           )}
+
+
+          {/* Pip reaches stop i once station i is answered correctly.
+              Phones: sits below the card · desktop: floats on the right. */}
+          <TrailBuddy position={stage === "complete" ? STATIONS.length : Math.min(STATIONS.length, currentIndex + (stage === "correct" ? 1 : 0))} />
         </div>
       </div>
     </main>
