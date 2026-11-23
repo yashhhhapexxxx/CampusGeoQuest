@@ -64,13 +64,12 @@ Your next destination is the place you seek.`,
 The other explores metals, their strength and design.
 Between these worlds of science and creation,
 Seek the place that offers a moment of relaxation on a green carpet.`,
-    // TODO: placeholder — no question was provided for the Chemical Lawn yet. Replace it.
     question:
-      "Which principle states that, in an undisturbed sequence, younger rock layers lie on top of older ones?",
+      "If the two sides of this structure represent blocks separated by a fault, what type of fault involves vertical movement of the blocks relative to one another along the fault plane? (Consider the fault plane to be perpendicular to a horizontal plane, i.e., vertical.)",
     answer: {
       kind: "mcq",
-      options: ["Original horizontality", "Superposition", "Cross-cutting relationships", "Uniformitarianism"],
-      answer: 1,
+      options: ["Normal fault", "Reverse fault", "Strike-slip fault", "Vertical slip fault"],
+      answer: 3,
     },
   },
   {
