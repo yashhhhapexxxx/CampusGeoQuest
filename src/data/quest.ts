@@ -14,10 +14,18 @@
 export type Answer =
   | { kind: "mcq"; options: string[]; answer: number }
   | { kind: "text"; accept: string[]; placeholder?: string; numeric?: boolean }
-  | {
-      kind: "measure";
-      expected?: { strike: number; dip: number; strikeTol?: number; dipTol?: number };
-    };
+  | { kind: "measure"; parts: MeasurePart[] };
+
+/** One field measurement: a plane (strike / dip / dip direction) or a line (trend / plunge). */
+export type MeasurePart =
+  | { label: string; kind: "plane"; strike: number; dip: number; dipDir: Compass }
+  | { label: string; kind: "line"; trend: number; plunge: number };
+
+export type Compass = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
+export const COMPASS: Compass[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+/** Field tolerances (degrees) — compass-clinometer readings on a sundial plate. */
+export const TOL = { strike: 10, dip: 4, trend: 10, plunge: 4 };
 
 export type Station = {
   id: number;
@@ -146,9 +154,17 @@ Find the place where cakes are cut, and dreams of blueprints fill the hut.`,
     hint: `I never wear a watch, yet I tell the time.
 I have no hands, but my shadow speaks.
 Find me under the sun.`,
-    question: "Measure the strike and dip of the sundial’s inclined plate.",
-    // No answer key yet: any valid measurement is accepted and recorded. Add `expected` to check it.
-    answer: { kind: "measure" },
+    question:
+      "Measure the strike and dip of the sundial’s inclined plate at Point A and Point B, then find the trend and plunge of their line of intersection.",
+    answer: {
+      kind: "measure",
+      parts: [
+        { label: "Point A", kind: "plane", strike: 318, dip: 11, dipDir: "NE" },
+        { label: "Point B", kind: "plane", strike: 246, dip: 9, dipDir: "NW" },
+        // Checked: the intersection of 318/11 NE and 246/09 NW is 004° / 7.96°.
+        { label: "Line of intersection", kind: "line", trend: 4, plunge: 8 },
+      ],
+    },
   },
 ];
 
@@ -176,12 +192,31 @@ export function checkText(input: string, a: Extract<Answer, { kind: "text" }>) {
   return a.accept.some((x) => v.includes(normalise(x)));
 }
 
-export function checkMeasure(strike: number, dip: number, a: Extract<Answer, { kind: "measure" }>) {
-  const valid = Number.isFinite(strike) && Number.isFinite(dip) && strike >= 0 && strike < 360 && dip >= 0 && dip <= 90;
-  if (!valid) return { ok: false, valid: false };
-  if (!a.expected) return { ok: true, valid: true };
-  const d = Math.abs(strike - a.expected.strike) % 180; // strike is a line: 10° ≡ 190°
-  const strikeErr = Math.min(d, 180 - d);
-  const ok = strikeErr <= (a.expected.strikeTol ?? 10) && Math.abs(dip - a.expected.dip) <= (a.expected.dipTol ?? 5);
-  return { ok, valid: true };
+const angDiff = (a: number, b: number, period: number) => {
+  const d = Math.abs(a - b) % period;
+  return Math.min(d, period - d);
+};
+
+/**
+ * Check each part. `values[i]` holds the typed fields for part i:
+ * plane → { strike, dip, dipDir }, line → { trend, plunge }.
+ * Strike is a line (10° ≡ 190°), so it is compared modulo 180; the dip direction tells the sides apart.
+ */
+export function checkMeasure(values: Record<string, string>[], a: Extract<Answer, { kind: "measure" }>) {
+  return a.parts.map((part, i) => {
+    const v = values[i] ?? {};
+    const num = (k: string) => (v[k] === undefined || v[k].trim() === "" ? NaN : Number(v[k]));
+    if (part.kind === "plane") {
+      const strike = num("strike");
+      const dip = num("dip");
+      const valid = strike >= 0 && strike < 360 && dip >= 0 && dip <= 90 && COMPASS.includes(v.dipDir as Compass);
+      const ok = valid && angDiff(strike, part.strike, 180) <= TOL.strike && Math.abs(dip - part.dip) <= TOL.dip && v.dipDir === part.dipDir;
+      return { label: part.label, valid, ok };
+    }
+    const trend = num("trend");
+    const plunge = num("plunge");
+    const valid = trend >= 0 && trend < 360 && plunge >= 0 && plunge <= 90;
+    const ok = valid && angDiff(trend, part.trend, 360) <= TOL.trend && Math.abs(plunge - part.plunge) <= TOL.plunge;
+    return { label: part.label, valid, ok };
+  });
 }

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Camera, Check, MapPin, QrCode, RotateCcw, X } from "lucide-react";
 import QrScanner from "qr-scanner";
-import { START_HINT, STATIONS, checkMeasure, checkText } from "../data/quest";
+import { COMPASS, START_HINT, STATIONS, checkMeasure, checkText } from "../data/quest";
 import { TrailBuddy } from "../components/TrailBuddy";
 
 type Stage = "scan" | "question" | "correct" | "complete";
@@ -110,8 +110,18 @@ export default function Quest() {
   };
 
   const [typed, setTyped] = useState("");
-  const [strikeIn, setStrikeIn] = useState("");
-  const [dipIn, setDipIn] = useState("");
+  const [measures, setMeasures] = useState<Record<string, string>[]>([]);
+  const [measureMsg, setMeasureMsg] = useState<string | null>(null);
+  const setField = (i: number, k: string, val: string) => {
+    setMeasures((m) => {
+      const next = [...m];
+      next[i] = { ...(next[i] ?? {}), [k]: val };
+      return next;
+    });
+    setInvalid(false);
+    setWrong(false);
+    setMeasureMsg(null);
+  };
   const [invalid, setInvalid] = useState(false);
 
   const pass = () => {
@@ -137,22 +147,27 @@ export default function Quest() {
   const submitMeasure = (e: React.FormEvent) => {
     e.preventDefault();
     if (station.answer.kind !== "measure") return;
-    const r = checkMeasure(Number(strikeIn), Number(dipIn), station.answer);
-    if (!r.valid) {
+    const r = checkMeasure(measures, station.answer);
+    const missing = r.filter((x) => !x.valid).map((x) => x.label);
+    if (missing.length) {
       setInvalid(true);
       setWrong(false);
+      setMeasureMsg(`Fill in every value for: ${missing.join(", ")}.`);
       return;
     }
-    if (r.ok) {
+    const off = r.filter((x) => !x.ok).map((x) => x.label);
+    if (!off.length) {
       try {
-        localStorage.setItem(`campus-geoquest-measure-${station.id}`, JSON.stringify({ strike: Number(strikeIn), dip: Number(dipIn) }));
+        localStorage.setItem(`campus-geoquest-measure-${station.id}`, JSON.stringify(measures));
       } catch {
         /* storage blocked */
       }
+      setMeasureMsg(null);
       pass();
     } else {
       setInvalid(false);
       setWrong(true);
+      setMeasureMsg(`Check again: ${off.join(", ")}.`);
     }
   };
 
@@ -166,8 +181,8 @@ export default function Quest() {
     setWrong(false);
     setInvalid(false);
     setTyped("");
-    setStrikeIn("");
-    setDipIn("");
+    setMeasures([]);
+    setMeasureMsg(null);
     setError(null);
     setCurrentIndex(next);
     setStage(next >= STATIONS.length ? "complete" : "scan");
@@ -389,28 +404,55 @@ export default function Quest() {
                   )}
 
                   {station.answer.kind === "measure" && (
-                    <form onSubmit={submitMeasure} className="mt-7 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <label className="block">
-                          <span className="text-[10px] uppercase tracking-[0.2em] text-text-secondary">Strike (0–359°)</span>
-                          <input value={strikeIn} onChange={(e) => { setStrikeIn(e.target.value); setInvalid(false); setWrong(false); }} inputMode="numeric" placeholder="e.g. 045" className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/[0.04] px-4 py-3.5 text-base text-white outline-none placeholder:text-white/35 focus:border-white/40" />
-                        </label>
-                        <label className="block">
-                          <span className="text-[10px] uppercase tracking-[0.2em] text-text-secondary">Dip (0–90°)</span>
-                          <input value={dipIn} onChange={(e) => { setDipIn(e.target.value); setInvalid(false); setWrong(false); }} inputMode="numeric" placeholder="e.g. 30" className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/[0.04] px-4 py-3.5 text-base text-white outline-none placeholder:text-white/35 focus:border-white/40" />
-                        </label>
-                      </div>
-                      <button type="submit" className="ease-precision flex w-full items-center justify-center gap-3 rounded-full bg-white px-8 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:shadow-[0_0_60px_rgba(255,255,255,0.15)]">Record measurement</button>
-                      {invalid && (
+                    <form onSubmit={submitMeasure} className="mt-6 space-y-4">
+                      {station.answer.parts.map((part, i) => (
+                        <fieldset key={part.label} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                          <legend className="px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#B5D98A]">{part.label}</legend>
+                          {part.kind === "plane" ? (
+                            <div className="grid grid-cols-3 gap-2">
+                              <label className="block">
+                                <span className="text-[9px] uppercase tracking-[0.18em] text-text-secondary">Strike°</span>
+                                <input value={measures[i]?.strike ?? ""} onChange={(e) => setField(i, "strike", e.target.value)} inputMode="numeric" placeholder="0–359" aria-label={`${part.label} strike`} className="mt-1 w-full rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/40" />
+                              </label>
+                              <label className="block">
+                                <span className="text-[9px] uppercase tracking-[0.18em] text-text-secondary">Dip°</span>
+                                <input value={measures[i]?.dip ?? ""} onChange={(e) => setField(i, "dip", e.target.value)} inputMode="numeric" placeholder="0–90" aria-label={`${part.label} dip`} className="mt-1 w-full rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/40" />
+                              </label>
+                              <label className="block">
+                                <span className="text-[9px] uppercase tracking-[0.18em] text-text-secondary">Dips to</span>
+                                <select value={measures[i]?.dipDir ?? ""} onChange={(e) => setField(i, "dipDir", e.target.value)} aria-label={`${part.label} dip direction`} className="mt-1 w-full rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/40">
+                                  <option value="" disabled>—</option>
+                                  {COMPASS.map((c) => (
+                                    <option key={c} value={c} className="bg-[#111]">{c}</option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="block">
+                                <span className="text-[9px] uppercase tracking-[0.18em] text-text-secondary">Trend°</span>
+                                <input value={measures[i]?.trend ?? ""} onChange={(e) => setField(i, "trend", e.target.value)} inputMode="numeric" placeholder="0–359" aria-label={`${part.label} trend`} className="mt-1 w-full rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/40" />
+                              </label>
+                              <label className="block">
+                                <span className="text-[9px] uppercase tracking-[0.18em] text-text-secondary">Plunge°</span>
+                                <input value={measures[i]?.plunge ?? ""} onChange={(e) => setField(i, "plunge", e.target.value)} inputMode="decimal" placeholder="0–90" aria-label={`${part.label} plunge`} className="mt-1 w-full rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-white/40" />
+                              </label>
+                            </div>
+                          )}
+                        </fieldset>
+                      ))}
+                      <button type="submit" className="ease-precision flex w-full items-center justify-center gap-3 rounded-full bg-white px-8 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:shadow-[0_0_60px_rgba(255,255,255,0.15)]">Check measurements</button>
+                      {measureMsg && (invalid || wrong) && (
                         <p className="flex items-start gap-2 text-xs leading-relaxed text-[color:var(--danger)]">
                           <X size={13} className="mt-0.5 shrink-0" />
-                          Enter a strike between 0 and 359 and a dip between 0 and 90.
+                          {measureMsg}
                         </p>
                       )}
                     </form>
                   )}
 
-                  {wrong && (
+                  {wrong && station.answer.kind !== "measure" && (
                     <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-[color:var(--danger)]">
                       <X size={13} className="mt-0.5 shrink-0" />
                       Not quite — read the clue again.
